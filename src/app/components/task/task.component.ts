@@ -56,7 +56,7 @@ import { FormsModule } from '@angular/forms';
 
           <div class="image-wrapper">
             <img 
-              [src]="'/images/' + currentQuestion.img" 
+              [src]="'/cognitive-experiment/images/' + currentQuestion.img" 
               [alt]="'Question ' + currentQuestion.id"
               class="question-image"
               (contextmenu)="$event.preventDefault()">
@@ -97,7 +97,7 @@ import { FormsModule } from '@angular/forms';
           <div class="timeout-icon">⏱</div>
           <h2>Время истекло</h2>
           <p class="timeout-message">
-            Позовите экспериментатора
+            Переход к опроснику...
           </p>
         </div>
       </div>
@@ -290,13 +290,6 @@ import { FormsModule } from '@angular/forms';
       font-size: 18px;
       line-height: 1.6;
     }
-    .timeout-card {
-      border: 3px solid #e74c3c;
-    }
-    .timeout-message {
-      font-weight: 600;
-      color: #e74c3c;
-    }
   `]
 })
 export class TaskComponent implements OnInit, OnDestroy {
@@ -393,12 +386,12 @@ export class TaskComponent implements OnInit, OnDestroy {
 
     setTimeout(() => {
       this.goToNext();
-    }, 3000);
+    }, 2000);
   }
 
   goToNext() {
-    const nextPhase = this.order === 1 ? 2 : 3;
-    this.router.navigate(['/baseline'], { queryParams: { phase: nextPhase } });
+    // После выполнения задания переходим к NASA-TLX
+    this.router.navigate(['/nasa-tlx'], { queryParams: { order: this.order } });
   }
 
   ngOnDestroy() {
