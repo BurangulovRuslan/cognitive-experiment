@@ -115,7 +115,7 @@ export class ExperimentService {
     this.eventLog.push(event);
   }
 
-  private async sendMarkerToNIC2(code: number, name: string, details: any = {}): Promise<boolean> {
+  public async sendMarkerToNIC2(code: number, name: string, details: any = {}): Promise<boolean> {
     try {
       const response = await fetch(`${this.nic2ServerUrl}/send-marker`, {
         method: 'POST',

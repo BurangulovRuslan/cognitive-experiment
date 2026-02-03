@@ -401,15 +401,22 @@ export class NasaTlxComponent implements OnInit {
       ? 'Условие 1: Большая языковая модель (ChatGPT)'
       : 'Условие 2: Поисковая система (Google)';
 
-    // Отправляем маркер начала NASA-TLX
+    // ✅ ИСПРАВЛЕНИЕ: отправляем маркер начала NASA-TLX сразу в NIC2
     const startMarker = this.order === 1 
       ? MARKER_CODES.NASA_TLX_1_START 
       : MARKER_CODES.NASA_TLX_2_START;
+
+    const startMarkerName = this.order === 1 
+      ? 'NASA_TLX_1_START' 
+      : 'NASA_TLX_2_START';
 
     this.expService.logEvent(`NASA_TLX_START`, { 
       condition: this.conditionType, 
       order: this.order 
     }, startMarker);
+
+    // ✅ Прямая отправка в NIC2
+    this.expService.sendMarkerToNIC2(startMarker, startMarkerName);
   }
 
   isComplete(): boolean {
@@ -434,20 +441,30 @@ export class NasaTlxComponent implements OnInit {
       timestamp: Date.now()
     };
 
-    // Отправляем маркер окончания NASA-TLX
+    // ✅ ИСПРАВЛЕНИЕ: отправляем маркер окончания NASA-TLX сразу в NIC2
     const endMarker = this.order === 1 
       ? MARKER_CODES.NASA_TLX_1_END 
       : MARKER_CODES.NASA_TLX_2_END;
 
+    const endMarkerName = this.order === 1 
+      ? 'NASA_TLX_1_COMPLETED' 
+      : 'NASA_TLX_2_COMPLETED';
+
     this.expService.logEvent('NASA_TLX_SUBMITTED', tlxData, endMarker);
 
-    // Переход к следующему этапу
-    if (this.order === 1) {
-      // После первого условия → фоновая активность → второе условие
-      this.router.navigate(['/baseline'], { queryParams: { phase: 2 } });
-    } else {
-      // После второго условия → финальная фоновая активность
-      this.router.navigate(['/baseline'], { queryParams: { phase: 3 } });
-    }
+    // ✅ Прямая отправка в NIC2
+    this.expService.sendMarkerToNIC2(endMarker, endMarkerName);
+
+    // Небольшая задержка перед переходом (чтобы маркер успел уйти)
+    setTimeout(() => {
+      // Переход к следующему этапу
+      if (this.order === 1) {
+        // После первого условия → фоновая активность → второе условие
+        this.router.navigate(['/baseline'], { queryParams: { phase: 2 } });
+      } else {
+        // После второго условия → финальная фоновая активность
+        this.router.navigate(['/baseline'], { queryParams: { phase: 3 } });
+      }
+    }, 100);
   }
 }
