@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ExperimentService } from '../../services/experiment.service';
+import { ExperimentService, MARKER_CODES } from '../../services/experiment.service';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -183,7 +183,10 @@ export class BaselineComponent implements OnInit, OnDestroy {
   runEyesOpen() {
     this.step = 'eyes-open';
     this.remainingTime = this.duration;
-    this.expService.logEvent('EYES_OPEN_START');
+
+    // Отправляем маркер в зависимости от фазы
+    const markerCode = this.getEyesOpenMarker();
+    this.expService.logEvent('EYES_OPEN_START', { phase: this.phase }, markerCode);
 
     this.timerInterval = setInterval(() => {
       this.remainingTime--;
@@ -198,7 +201,10 @@ export class BaselineComponent implements OnInit, OnDestroy {
   runEyesClosed() {
     this.step = 'eyes-closed';
     this.remainingTime = this.duration;
-    this.expService.logEvent('EYES_CLOSED_START');
+
+    // Отправляем маркер в зависимости от фазы
+    const markerCode = this.getEyesClosedMarker();
+    this.expService.logEvent('EYES_CLOSED_START', { phase: this.phase }, markerCode);
 
     this.timerInterval = setInterval(() => {
       this.remainingTime--;
@@ -208,6 +214,26 @@ export class BaselineComponent implements OnInit, OnDestroy {
         this.finishBaseline();
       }
     }, 1000);
+  }
+
+  // Получаем код маркера для "глаза открыты" в зависимости от фазы
+  getEyesOpenMarker(): number {
+    switch(this.phase) {
+      case 1: return MARKER_CODES.BASELINE_1_EYES_OPEN;
+      case 2: return MARKER_CODES.BASELINE_2_EYES_OPEN;
+      case 3: return MARKER_CODES.BASELINE_3_EYES_OPEN;
+      default: return MARKER_CODES.BASELINE_1_EYES_OPEN;
+    }
+  }
+
+  // Получаем код маркера для "глаза закрыты" в зависимости от фазы
+  getEyesClosedMarker(): number {
+    switch(this.phase) {
+      case 1: return MARKER_CODES.BASELINE_1_EYES_CLOSED;
+      case 2: return MARKER_CODES.BASELINE_2_EYES_CLOSED;
+      case 3: return MARKER_CODES.BASELINE_3_EYES_CLOSED;
+      default: return MARKER_CODES.BASELINE_1_EYES_CLOSED;
+    }
   }
 
   playBeep() {

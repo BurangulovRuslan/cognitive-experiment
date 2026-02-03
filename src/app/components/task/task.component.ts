@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ExperimentService, ConditionType } from '../../services/experiment.service';
+import { ExperimentService, ConditionType, MARKER_CODES } from '../../services/experiment.service';
 import { Question } from '../../data/questions';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -337,10 +337,16 @@ export class TaskComponent implements OnInit, OnDestroy {
 
   startTask() {
     this.showInstruction = false;
+
+    // Отправляем маркер начала задания
+    const startMarker = this.conditionType === 'LLM' 
+      ? MARKER_CODES.TASK_LLM_START 
+      : MARKER_CODES.TASK_SEARCH_START;
+
     this.expService.logEvent(`TASK_${this.conditionType}_START`, { 
       order: this.order,
       questionsCount: this.questions.length 
-    });
+    }, startMarker);
 
     if (this.currentQuestion) {
       this.expService.markQuestionShown(this.currentQuestion.id);
@@ -382,7 +388,15 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
 
     this.timeExpired = true;
-    this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`);
+
+    // Отправляем маркер окончания задания
+    const endMarker = this.conditionType === 'LLM' 
+      ? MARKER_CODES.TASK_LLM_END 
+      : MARKER_CODES.TASK_SEARCH_END;
+
+    this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
+      questionsAnswered: this.currentIndex
+    }, endMarker);
 
     setTimeout(() => {
       this.goToNext();

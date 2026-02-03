@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ExperimentService, ConditionType } from '../../services/experiment.service';
+import { ExperimentService, ConditionType, MARKER_CODES } from '../../services/experiment.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -401,7 +401,15 @@ export class NasaTlxComponent implements OnInit {
       ? 'Условие 1: Большая языковая модель (ChatGPT)'
       : 'Условие 2: Поисковая система (Google)';
 
-    this.expService.logEvent(`NASA_TLX_START`, { condition: this.conditionType, order: this.order });
+    // Отправляем маркер начала NASA-TLX
+    const startMarker = this.order === 1 
+      ? MARKER_CODES.NASA_TLX_1_START 
+      : MARKER_CODES.NASA_TLX_2_START;
+
+    this.expService.logEvent(`NASA_TLX_START`, { 
+      condition: this.conditionType, 
+      order: this.order 
+    }, startMarker);
   }
 
   isComplete(): boolean {
@@ -426,7 +434,12 @@ export class NasaTlxComponent implements OnInit {
       timestamp: Date.now()
     };
 
-    this.expService.logEvent('NASA_TLX_SUBMITTED', tlxData);
+    // Отправляем маркер окончания NASA-TLX
+    const endMarker = this.order === 1 
+      ? MARKER_CODES.NASA_TLX_1_END 
+      : MARKER_CODES.NASA_TLX_2_END;
+
+    this.expService.logEvent('NASA_TLX_SUBMITTED', tlxData, endMarker);
 
     // Переход к следующему этапу
     if (this.order === 1) {
