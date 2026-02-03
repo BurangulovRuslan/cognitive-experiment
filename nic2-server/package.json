@@ -1,0 +1,16 @@
+{
+  "name": "nic2-sync-server",
+  "version": "1.0.0",
+  "description": "TCP bridge server for synchronizing web app with NIC2",
+  "main": "nic2-sync-server.js",
+  "scripts": {
+    "start": "node nic2-sync-server.js"
+  },
+  "keywords": ["NIC2", "EEG", "synchronization", "markers"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
