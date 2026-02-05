@@ -96,7 +96,8 @@ export class ExperimentService {
     }, MARKER_CODES.SESSION_START);
   }
 
-  async logEvent(name: string, details: any = {}, markerCode?: number) {
+  // ✅ ИСПРАВЛЕННЫЙ МЕТОД - БЕЗ async/await
+  logEvent(name: string, details: any = {}, markerCode?: number) {
     const timestamp = Date.now();
     const event: EventLog = {
       timestamp: timestamp,
@@ -106,10 +107,14 @@ export class ExperimentService {
       markerCode: markerCode
     };
 
-    // Отправляем маркер в NIC2 (если указан код)
+    // Отправляем маркер в NIC2 (если указан код) - БЕЗ AWAIT!
     if (markerCode !== undefined && this.nic2Enabled) {
-      const success = await this.sendMarkerToNIC2(markerCode, name, details);
-      event.markerSent = success;
+      this.sendMarkerToNIC2(markerCode, name, details).then(success => {
+        event.markerSent = success;
+      }).catch(err => {
+        event.markerSent = false;
+        console.warn('Маркер не отправлен в NIC2:', err);
+      });
     }
 
     this.eventLog.push(event);
