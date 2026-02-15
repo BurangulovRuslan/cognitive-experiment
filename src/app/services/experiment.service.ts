@@ -6,12 +6,13 @@ import { saveAs } from 'file-saver';
 export type ConditionType = 'LLM' | 'SEARCH';
 
 export interface EventLog {
+  eventId: number;            // ✅ стабильный порядок
   timestamp: number;
   readableTime: string;
   event: string;
   details: string;
-  markerCode?: number; // Код маркера для NIC2
-  markerSent?: boolean; // Успешно отправлен в NIC2
+  markerCode?: number;
+  markerSent?: boolean;
 }
 
 export interface AnswerLog {
@@ -26,39 +27,37 @@ export interface AnswerLog {
   responseTimeMs: number;
   markerShown?: number;
   markerSubmitted?: number;
+  // ✅ помогает отлаживать связку
+  shownEventId?: number;
+  submittedEventId?: number;
 }
 
 // Коды маркеров для NIC2
 export const MARKER_CODES = {
-  // Системные события
   SESSION_START: 1,
   SESSION_END: 999,
 
-  // Baseline (фоновая активность)
   BASELINE_1_EYES_OPEN: 10,
   BASELINE_1_EYES_CLOSED: 11,
   BASELINE_2_EYES_OPEN: 12,
   BASELINE_2_EYES_CLOSED: 13,
   BASELINE_3_EYES_OPEN: 14,
   BASELINE_3_EYES_CLOSED: 15,
+  EYES_CLOSED_END: 16,
 
-  // Задания
   TASK_LLM_START: 20,
   TASK_LLM_END: 21,
   TASK_SEARCH_START: 30,
   TASK_SEARCH_END: 31,
 
-  // Вопросы (100-199 - показ, 200-299 - ответ)
   QUESTION_SHOWN_BASE: 100,
   ANSWER_SUBMITTED_BASE: 200,
 
-  // NASA-TLX
   NASA_TLX_1_START: 500,
   NASA_TLX_1_END: 501,
   NASA_TLX_2_START: 510,
   NASA_TLX_2_END: 511,
 
-  // Экспорт
   EXPORT_START: 900
 };
 
@@ -73,9 +72,15 @@ export class ExperimentService {
   eventLog: EventLog[] = [];
   answersLog: AnswerLog[] = [];
 
-  private questionShownTime: number = 0;
-  private nic2ServerUrl = 'http://localhost:3000'; // Адрес сервера-моста
-  private nic2Enabled = true; // Включить/выключить отправку маркеров
+  private nic2ServerUrl = 'http://localhost:3000';
+  private nic2Enabled = true;
+
+  // ✅ вместо одного questionShownTime
+  private shownAtByQuestionId = new Map<string, number>();
+  private shownEventIdByQuestionId = new Map<string, number>();
+
+  // ✅ стабильный порядок событий
+  private nextEventId = 1;
 
   constructor() {
     this.setupEmergencyStop();
@@ -85,48 +90,57 @@ export class ExperimentService {
     this.participantId = pid;
     this.group = group;
     this.isTestMode = isTest;
+
     this.eventLog = [];
     this.answersLog = [];
+    this.shownAtByQuestionId.clear();
+    this.shownEventIdByQuestionId.clear();
+    this.nextEventId = 1;
 
-    this.logEvent('SESSION_START', { 
-      pid, 
-      group, 
-      isTest, 
-      systemTime: new Date().toISOString() 
+    // важные маркеры можно await'ить, но тут необязательно
+    void this.logEvent('SESSION_START', {
+      pid,
+      group,
+      isTest,
+      systemTime: new Date().toISOString()
     }, MARKER_CODES.SESSION_START);
   }
 
-  async logEvent(name: string, details: any = {}, markerCode?: number) {
+  /**
+   * ✅ Главное: eventLog фиксируем СРАЗУ, сетевую отправку делаем после.
+   * Так порядок в Excel = порядок реальных событий в UI.
+   */
+  async logEvent(name: string, details: any = {}, markerCode?: number): Promise<number> {
     const timestamp = Date.now();
+    const eventId = this.nextEventId++;
+
     const event: EventLog = {
-      timestamp: timestamp,
-      readableTime: new Date().toISOString(),
+      eventId,
+      timestamp,
+      readableTime: new Date(timestamp).toISOString(),
       event: name,
       details: JSON.stringify(details),
-      markerCode: markerCode
+      markerCode
     };
 
-    // Отправляем маркер в NIC2 (если указан код)
-    if (markerCode !== undefined && this.nic2Enabled) {
+    // ✅ фиксируем порядок сразу
+    this.eventLog.push(event);
+
+    // ✅ затем отправляем маркер (если надо)
+    if (typeof markerCode === 'number' && markerCode > 0 && this.nic2Enabled) {
       const success = await this.sendMarkerToNIC2(markerCode, name, details);
       event.markerSent = success;
     }
 
-    this.eventLog.push(event);
+    return eventId;
   }
 
   private async sendMarkerToNIC2(code: number, name: string, details: any = {}): Promise<boolean> {
     try {
       const response = await fetch(`${this.nic2ServerUrl}/send-marker`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code,
-          name: name,
-          details: details
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name, details })
       });
 
       const result = await response.json();
@@ -146,51 +160,65 @@ export class ExperimentService {
   }
 
   markQuestionShown(questionId: string) {
-    this.questionShownTime = Date.now();
+    const shownAt = Date.now();
+    this.shownAtByQuestionId.set(questionId, shownAt);
 
-    // Вычисляем код маркера: QUESTION_SHOWN_BASE + номер вопроса
     const questionNumber = this.extractQuestionNumber(questionId);
     const markerCode = MARKER_CODES.QUESTION_SHOWN_BASE + questionNumber;
 
-    this.logEvent('QUESTION_SHOWN', { 
-      questionId, 
-      timestamp: this.questionShownTime 
-    }, markerCode);
+    // ✅ логируем и сохраняем eventId показа именно этого questionId
+    void this.logEvent('QUESTION_SHOWN', { questionId, timestamp: shownAt }, markerCode)
+      .then((eventId) => {
+        this.shownEventIdByQuestionId.set(questionId, eventId);
+      });
   }
 
   submitAnswer(stage: ConditionType, question: Question, input: string) {
     const submittedTime = Date.now();
-    const responseTime = submittedTime - this.questionShownTime;
+
+    // ✅ берём время показа именно этого вопроса
+    const shownTime = this.shownAtByQuestionId.get(question.id) ?? submittedTime;
+    const responseTime = submittedTime - shownTime;
+
     const isCorrect = checkAnswer(question, input);
 
     const questionNumber = this.extractQuestionNumber(question.id);
     const markerShown = MARKER_CODES.QUESTION_SHOWN_BASE + questionNumber;
     const markerSubmitted = MARKER_CODES.ANSWER_SUBMITTED_BASE + questionNumber;
 
+    const shownEventId = this.shownEventIdByQuestionId.get(question.id);
+
+    // ✅ логируем ANSWER_SUBMITTED и сохраняем eventId ответа
+    void this.logEvent('ANSWER_SUBMITTED', {
+      questionId: question.id,
+      correct: isCorrect,
+      responseTimeMs: responseTime
+    }, markerSubmitted).then((submittedEventId) => {
+      // допишем submittedEventId в последнюю добавленную запись answersLog (ниже мы её уже пушим)
+      const last = this.answersLog[this.answersLog.length - 1];
+      if (last && last.questionId === question.id && last.timestampSubmitted === submittedTime) {
+        last.submittedEventId = submittedEventId;
+      }
+    });
+
     this.answersLog.push({
       participantId: this.participantId,
-      stage: stage,
+      stage,
       questionId: question.id,
       questionText: question.text,
       inputRaw: input,
-      isCorrect: isCorrect,
-      timestampShown: this.questionShownTime,
+      isCorrect,
+      timestampShown: shownTime,
       timestampSubmitted: submittedTime,
       responseTimeMs: responseTime,
-      markerShown: markerShown,
-      markerSubmitted: markerSubmitted
+      markerShown,
+      markerSubmitted,
+      shownEventId
     });
-
-    this.logEvent('ANSWER_SUBMITTED', { 
-      questionId: question.id, 
-      correct: isCorrect,
-      responseTimeMs: responseTime 
-    }, markerSubmitted);
 
     return isCorrect;
   }
 
-  // Извлекаем номер вопроса из ID (A01 -> 1, B15 -> 15)
   private extractQuestionNumber(questionId: string): number {
     const match = questionId.match(/\d+/);
     return match ? parseInt(match[0], 10) : 0;
@@ -207,11 +235,10 @@ export class ExperimentService {
   }
 
   exportData() {
-    this.logEvent('EXPORT_INITIATED', {}, MARKER_CODES.EXPORT_START);
+    void this.logEvent('EXPORT_INITIATED', {}, MARKER_CODES.EXPORT_START);
 
     const wb: XLSX.WorkBook = XLSX.utils.book_new();
 
-    // Summary
     const summaryData = [{
       ParticipantID: this.participantId,
       Group: this.group,
@@ -221,10 +248,8 @@ export class ExperimentService {
       TestMode: this.isTestMode ? 'Yes' : 'No',
       ExportTime: new Date().toISOString()
     }];
-    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), 'Summary');
 
-    // Answers
     const answersData = this.answersLog.map(a => ({
       ParticipantID: a.participantId,
       Stage: a.stage,
@@ -238,13 +263,14 @@ export class ExperimentService {
       TimestampShown: a.timestampShown,
       TimestampShown_Readable: new Date(a.timestampShown).toISOString(),
       TimestampSubmitted: a.timestampSubmitted,
-      TimestampSubmitted_Readable: new Date(a.timestampSubmitted).toISOString()
+      TimestampSubmitted_Readable: new Date(a.timestampSubmitted).toISOString(),
+      ShownEventId: a.shownEventId ?? '',
+      SubmittedEventId: a.submittedEventId ?? ''
     }));
-    const wsAnswers = XLSX.utils.json_to_sheet(answersData);
-    XLSX.utils.book_append_sheet(wb, wsAnswers, 'Answers');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(answersData), 'Answers');
 
-    // EventLog с маркерами
     const eventsData = this.eventLog.map(e => ({
+      EventId: e.eventId,
       Timestamp: e.timestamp,
       ReadableTime: e.readableTime,
       Event: e.event,
@@ -252,27 +278,24 @@ export class ExperimentService {
       MarkerSent: e.markerSent === true ? 'YES' : e.markerSent === false ? 'NO' : '',
       Details: e.details
     }));
-    const wsEvents = XLSX.utils.json_to_sheet(eventsData);
-    XLSX.utils.book_append_sheet(wb, wsEvents, 'EventLog');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(eventsData), 'EventLog');
 
-    // Marker Codes Reference
     const markerCodesData = Object.entries(MARKER_CODES).map(([name, code]) => ({
       Code: code,
       EventName: name,
       Description: this.getMarkerDescription(name)
     }));
-    const wsMarkerCodes = XLSX.utils.json_to_sheet(markerCodesData);
-    XLSX.utils.book_append_sheet(wb, wsMarkerCodes, 'MarkerCodes');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(markerCodesData), 'MarkerCodes');
 
     const excelBuffer: any = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const data: Blob = new Blob([excelBuffer], { 
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    const data: Blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });
 
     const fileName = `Participant_${this.participantId}_${Date.now()}.xlsx`;
     saveAs(data, fileName);
 
-    this.logEvent('EXPORT_COMPLETED', { fileName });
+    void this.logEvent('EXPORT_COMPLETED', { fileName });
   }
 
   private getMarkerDescription(name: string): string {
@@ -285,6 +308,7 @@ export class ExperimentService {
       'BASELINE_2_EYES_CLOSED': 'Baseline 2: глаза закрыты',
       'BASELINE_3_EYES_OPEN': 'Baseline 3: глаза открыты',
       'BASELINE_3_EYES_CLOSED': 'Baseline 3: глаза закрыты',
+      'EYES_CLOSED_END': 'Конец закрытых глаз (сигнал открыть глаза)',
       'TASK_LLM_START': 'Начало задания с LLM (ChatGPT)',
       'TASK_LLM_END': 'Окончание задания с LLM',
       'TASK_SEARCH_START': 'Начало задания с поиском (Google)',
@@ -311,7 +335,7 @@ export class ExperimentService {
   }
 
   emergencyStop() {
-    this.logEvent('EMERGENCY_STOP', { reason: 'Manual stop by experimenter' }, MARKER_CODES.SESSION_END);
+    void this.logEvent('EMERGENCY_STOP', { reason: 'Manual stop by experimenter' }, MARKER_CODES.SESSION_END);
     alert('Эксперимент остановлен экстренно. Данные будут сохранены.');
   }
 
@@ -319,7 +343,7 @@ export class ExperimentService {
     return {
       totalAnswers: this.answersLog.length,
       correctAnswers: this.answersLog.filter(a => a.isCorrect).length,
-      averageResponseTime: this.answersLog.length > 0 
+      averageResponseTime: this.answersLog.length > 0
         ? Math.round(this.answersLog.reduce((sum, a) => sum + a.responseTimeMs, 0) / this.answersLog.length)
         : 0
     };

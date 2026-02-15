@@ -55,25 +55,25 @@ import { FormsModule } from '@angular/forms';
           </div>
 
           <div class="image-wrapper">
-            <img 
-              [src]="'/cognitive-experiment/images/' + currentQuestion.img" 
+            <img
+              [src]="'cognitive-experiment/images/' + currentQuestion.img"
               [alt]="'Question ' + currentQuestion.id"
               class="question-image"
               (contextmenu)="$event.preventDefault()">
           </div>
 
           <div class="answer-section">
-            <input 
+            <input
               type="text"
-              [(ngModel)]="currentAnswer" 
+              [(ngModel)]="currentAnswer"
               (keyup.enter)="nextQuestion()"
               placeholder="Введите ваш ответ здесь..."
               class="answer-input"
               [disabled]="timeExpired"
               #answerInput>
 
-            <button 
-              class="btn-next" 
+            <button
+              class="btn-next"
               (click)="nextQuestion()"
               [disabled]="!currentAnswer.trim() || timeExpired">
               Далее →
@@ -325,7 +325,7 @@ export class TaskComponent implements OnInit, OnDestroy {
       this.questions = [...config.set2];
     }
 
-    this.conditionTitle = this.conditionType === 'LLM' 
+    this.conditionTitle = this.conditionType === 'LLM'
       ? 'Этап 1: Большая языковая модель (ChatGPT)'
       : 'Этап 2: Поисковая система (Google)';
 
@@ -335,17 +335,16 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
   }
 
-  startTask() {
+  async startTask() {
     this.showInstruction = false;
 
-    // Отправляем маркер начала задания
-    const startMarker = this.conditionType === 'LLM' 
-      ? MARKER_CODES.TASK_LLM_START 
+    const startMarker = this.conditionType === 'LLM'
+      ? MARKER_CODES.TASK_LLM_START
       : MARKER_CODES.TASK_SEARCH_START;
 
-    this.expService.logEvent(`TASK_${this.conditionType}_START`, { 
+    await this.expService.logEvent(`TASK_${this.conditionType}_START`, {
       order: this.order,
-      questionsCount: this.questions.length 
+      questionsCount: this.questions.length
     }, startMarker);
 
     if (this.currentQuestion) {
@@ -353,7 +352,7 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
 
     this.timerRef = setTimeout(() => {
-      this.finishTask();
+      void this.finishTask();
     }, this.taskDuration * 1000);
   }
 
@@ -367,8 +366,8 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
 
     this.expService.submitAnswer(
-      this.conditionType, 
-      this.currentQuestion, 
+      this.conditionType,
+      this.currentQuestion,
       this.currentAnswer
     );
 
@@ -382,19 +381,18 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
   }
 
-  finishTask() {
+  async finishTask() {
     if (this.timerRef) {
       clearTimeout(this.timerRef);
     }
 
     this.timeExpired = true;
 
-    // Отправляем маркер окончания задания
-    const endMarker = this.conditionType === 'LLM' 
-      ? MARKER_CODES.TASK_LLM_END 
+    const endMarker = this.conditionType === 'LLM'
+      ? MARKER_CODES.TASK_LLM_END
       : MARKER_CODES.TASK_SEARCH_END;
 
-    this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
+    await this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
       questionsAnswered: this.currentIndex
     }, endMarker);
 
@@ -404,7 +402,6 @@ export class TaskComponent implements OnInit, OnDestroy {
   }
 
   goToNext() {
-    // После выполнения задания переходим к NASA-TLX
     this.router.navigate(['/nasa-tlx'], { queryParams: { order: this.order } });
   }
 

@@ -175,50 +175,56 @@ export class BaselineComponent implements OnInit, OnDestroy {
     }
   }
 
-  startBaseline() {
-    this.expService.logEvent(`BASELINE_PHASE_${this.phase}_START`);
-    this.runEyesOpen();
+  async startBaseline() {
+    await this.expService.logEvent(`BASELINE_PHASE_${this.phase}_START`);
+    await this.runEyesOpen();
   }
 
-  runEyesOpen() {
+  async runEyesOpen() {
     this.step = 'eyes-open';
     this.remainingTime = this.duration;
 
-    // Отправляем маркер в зависимости от фазы
     const markerCode = this.getEyesOpenMarker();
-    this.expService.logEvent('EYES_OPEN_START', { phase: this.phase }, markerCode);
+    await this.expService.logEvent('EYES_OPEN_START', { phase: this.phase }, markerCode);
 
     this.timerInterval = setInterval(() => {
       this.remainingTime--;
       if (this.remainingTime <= 0) {
         clearInterval(this.timerInterval);
         this.playBeep();
-        this.runEyesClosed();
+        void this.runEyesClosed();
       }
     }, 1000);
   }
 
-  runEyesClosed() {
+  async runEyesClosed() {
     this.step = 'eyes-closed';
     this.remainingTime = this.duration;
 
-    // Отправляем маркер в зависимости от фазы
     const markerCode = this.getEyesClosedMarker();
-    this.expService.logEvent('EYES_CLOSED_START', { phase: this.phase }, markerCode);
+    await this.expService.logEvent('EYES_CLOSED_START', { phase: this.phase }, markerCode);
 
     this.timerInterval = setInterval(() => {
       this.remainingTime--;
       if (this.remainingTime <= 0) {
         clearInterval(this.timerInterval);
+
+        // 🔔 Сигнал "откройте глаза"
         this.playBeep();
-        this.finishBaseline();
+        void this.markEyesClosedEndAndFinish();
       }
     }, 1000);
   }
 
-  // Получаем код маркера для "глаза открыты" в зависимости от фазы
+  private async markEyesClosedEndAndFinish() {
+    // ✅ единый код конца закрытых глаз
+    await this.expService.logEvent('EYES_CLOSED_END', { phase: this.phase }, MARKER_CODES.EYES_CLOSED_END);
+
+    await this.finishBaseline();
+  }
+
   getEyesOpenMarker(): number {
-    switch(this.phase) {
+    switch (this.phase) {
       case 1: return MARKER_CODES.BASELINE_1_EYES_OPEN;
       case 2: return MARKER_CODES.BASELINE_2_EYES_OPEN;
       case 3: return MARKER_CODES.BASELINE_3_EYES_OPEN;
@@ -226,9 +232,8 @@ export class BaselineComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Получаем код маркера для "глаза закрыты" в зависимости от фазы
   getEyesClosedMarker(): number {
-    switch(this.phase) {
+    switch (this.phase) {
       case 1: return MARKER_CODES.BASELINE_1_EYES_CLOSED;
       case 2: return MARKER_CODES.BASELINE_2_EYES_CLOSED;
       case 3: return MARKER_CODES.BASELINE_3_EYES_CLOSED;
@@ -259,8 +264,8 @@ export class BaselineComponent implements OnInit, OnDestroy {
     }
   }
 
-  finishBaseline() {
-    this.expService.logEvent(`BASELINE_PHASE_${this.phase}_FINISHED`);
+  async finishBaseline() {
+    await this.expService.logEvent(`BASELINE_PHASE_${this.phase}_FINISHED`);
     this.goToNext();
   }
 

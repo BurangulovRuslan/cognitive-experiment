@@ -39,10 +39,10 @@ interface NASATLXScale {
                 <span class="label-high">{{ scale.highLabel }}</span>
               </div>
 
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
+              <input
+                type="range"
+                min="0"
+                max="100"
                 step="5"
                 [(ngModel)]="scale.value"
                 class="slider">
@@ -60,9 +60,9 @@ interface NASATLXScale {
 
           <div class="confidence-options">
             <label *ngFor="let option of confidenceOptions" class="confidence-option">
-              <input 
-                type="radio" 
-                name="confidence" 
+              <input
+                type="radio"
+                name="confidence"
                 [value]="option.value"
                 [(ngModel)]="confidence">
               <span>{{ option.label }}</span>
@@ -73,18 +73,18 @@ interface NASATLXScale {
         <div class="strategy-section">
           <h3>Стратегия поиска</h3>
           <p>Опишите кратко, какие стратегии вы использовали для поиска информации:</p>
-          <textarea 
+          <textarea
             [(ngModel)]="strategy"
             placeholder="Например: формулировал короткие запросы, уточнял по ключевым словам..."
             rows="4"
             class="strategy-textarea"></textarea>
         </div>
 
-        <button 
-          class="btn-continue" 
+        <button
+          class="btn-continue"
           (click)="submit()"
-          [disabled]="!isComplete()">
-          Продолжить →
+          [disabled]="!isComplete() || submitting">
+          {{ submitting ? 'Сохранение...' : 'Продолжить →' }}
         </button>
 
         <div class="progress-info">
@@ -333,49 +333,15 @@ export class NasaTlxComponent implements OnInit {
   confidence: number = 3;
   strategy: string = '';
 
+  submitting = false;
+
   scales: NASATLXScale[] = [
-    {
-      id: 'mental',
-      question: 'Умственная нагрузка',
-      lowLabel: 'Очень низкая',
-      highLabel: 'Очень высокая',
-      value: 50
-    },
-    {
-      id: 'physical',
-      question: 'Физическая нагрузка',
-      lowLabel: 'Очень низкая',
-      highLabel: 'Очень высокая',
-      value: 50
-    },
-    {
-      id: 'temporal',
-      question: 'Временная нагрузка (спешка, дефицит времени)',
-      lowLabel: 'Очень низкая',
-      highLabel: 'Очень высокая',
-      value: 50
-    },
-    {
-      id: 'performance',
-      question: 'Успешность выполнения',
-      lowLabel: 'Отлично',
-      highLabel: 'Провал',
-      value: 50
-    },
-    {
-      id: 'effort',
-      question: 'Усилия (насколько тяжело пришлось работать)',
-      lowLabel: 'Очень низкие',
-      highLabel: 'Очень высокие',
-      value: 50
-    },
-    {
-      id: 'frustration',
-      question: 'Фрустрация (раздражение, стресс, неуверенность)',
-      lowLabel: 'Очень низкая',
-      highLabel: 'Очень высокая',
-      value: 50
-    }
+    { id: 'mental', question: 'Умственная нагрузка', lowLabel: 'Очень низкая', highLabel: 'Очень высокая', value: 50 },
+    { id: 'physical', question: 'Физическая нагрузка', lowLabel: 'Очень низкая', highLabel: 'Очень высокая', value: 50 },
+    { id: 'temporal', question: 'Временная нагрузка (спешка, дефицит времени)', lowLabel: 'Очень низкая', highLabel: 'Очень высокая', value: 50 },
+    { id: 'performance', question: 'Успешность выполнения', lowLabel: 'Отлично', highLabel: 'Провал', value: 50 },
+    { id: 'effort', question: 'Усилия (насколько тяжело пришлось работать)', lowLabel: 'Очень низкие', highLabel: 'Очень высокие', value: 50 },
+    { id: 'frustration', question: 'Фрустрация (раздражение, стресс, неуверенность)', lowLabel: 'Очень низкая', highLabel: 'Очень высокая', value: 50 }
   ];
 
   confidenceOptions = [
@@ -392,23 +358,22 @@ export class NasaTlxComponent implements OnInit {
     private expService: ExperimentService
   ) {}
 
-  ngOnInit() {
+  async ngOnInit() {
     this.order = Number(this.route.snapshot.queryParams['order']) || 1;
     const config = this.expService.getConfig();
 
     this.conditionType = this.order === 1 ? config.first : config.second;
-    this.conditionTitle = this.conditionType === 'LLM' 
+    this.conditionTitle = this.conditionType === 'LLM'
       ? 'Условие 1: Большая языковая модель (ChatGPT)'
       : 'Условие 2: Поисковая система (Google)';
 
-    // Отправляем маркер начала NASA-TLX
-    const startMarker = this.order === 1 
-      ? MARKER_CODES.NASA_TLX_1_START 
+    const startMarker = this.order === 1
+      ? MARKER_CODES.NASA_TLX_1_START
       : MARKER_CODES.NASA_TLX_2_START;
 
-    this.expService.logEvent(`NASA_TLX_START`, { 
-      condition: this.conditionType, 
-      order: this.order 
+    await this.expService.logEvent('NASA_TLX_START', {
+      condition: this.conditionType,
+      order: this.order
     }, startMarker);
   }
 
@@ -416,11 +381,15 @@ export class NasaTlxComponent implements OnInit {
     return this.strategy.trim().length > 0;
   }
 
-  submit() {
+  async submit() {
+    if (this.submitting) return;
+
     if (!this.isComplete()) {
       alert('Пожалуйста, опишите вашу стратегию поиска');
       return;
     }
+
+    this.submitting = true;
 
     const tlxData = {
       condition: this.conditionType,
@@ -434,19 +403,16 @@ export class NasaTlxComponent implements OnInit {
       timestamp: Date.now()
     };
 
-    // Отправляем маркер окончания NASA-TLX
-    const endMarker = this.order === 1 
-      ? MARKER_CODES.NASA_TLX_1_END 
+    const endMarker = this.order === 1
+      ? MARKER_CODES.NASA_TLX_1_END
       : MARKER_CODES.NASA_TLX_2_END;
 
-    this.expService.logEvent('NASA_TLX_SUBMITTED', tlxData, endMarker);
+    await this.expService.logEvent('NASA_TLX_SUBMITTED', tlxData, endMarker);
 
-    // Переход к следующему этапу
+    // Переход к следующему этапу — ТОЛЬКО после await
     if (this.order === 1) {
-      // После первого условия → фоновая активность → второе условие
       this.router.navigate(['/baseline'], { queryParams: { phase: 2 } });
     } else {
-      // После второго условия → финальная фоновая активность
       this.router.navigate(['/baseline'], { queryParams: { phase: 3 } });
     }
   }
