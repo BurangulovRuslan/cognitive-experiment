@@ -298,11 +298,9 @@ export class TaskComponent implements OnInit, OnDestroy {
   conditionTitle: string = '';
   questions: Question[] = [];
   currentIndex = 0;
-
   showInstruction = true;
   currentAnswer = '';
   timeExpired = false;
-
   private timerRef: any;
   private taskDuration = 20 * 60;
   taskDurationText = '20 минут';
@@ -335,15 +333,14 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
   }
 
-  startTask() {
+  async startTask() {
     this.showInstruction = false;
 
-    // Отправляем маркер начала задания
     const startMarker = this.conditionType === 'LLM' 
       ? MARKER_CODES.TASK_LLM_START 
       : MARKER_CODES.TASK_SEARCH_START;
 
-    this.expService.logEvent(`TASK_${this.conditionType}_START`, { 
+    await this.expService.logEvent(`TASK_${this.conditionType}_START`, { 
       order: this.order,
       questionsCount: this.questions.length 
     }, startMarker);
@@ -382,19 +379,18 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
   }
 
-  finishTask() {
+  async finishTask() {
     if (this.timerRef) {
       clearTimeout(this.timerRef);
     }
 
     this.timeExpired = true;
 
-    // Отправляем маркер окончания задания
     const endMarker = this.conditionType === 'LLM' 
       ? MARKER_CODES.TASK_LLM_END 
       : MARKER_CODES.TASK_SEARCH_END;
 
-    this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
+    await this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
       questionsAnswered: this.currentIndex
     }, endMarker);
 
@@ -404,7 +400,6 @@ export class TaskComponent implements OnInit, OnDestroy {
   }
 
   goToNext() {
-    // После выполнения задания переходим к NASA-TLX
     this.router.navigate(['/nasa-tlx'], { queryParams: { order: this.order } });
   }
 

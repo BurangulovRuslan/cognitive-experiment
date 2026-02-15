@@ -10,8 +10,8 @@ export interface EventLog {
   readableTime: string;
   event: string;
   details: string;
-  markerCode?: number; // Код маркера для NIC2
-  markerSent?: boolean; // Успешно отправлен в NIC2
+  markerCode?: number;
+  markerSent?: boolean;
 }
 
 export interface AnswerLog {
@@ -28,37 +28,25 @@ export interface AnswerLog {
   markerSubmitted?: number;
 }
 
-// Коды маркеров для NIC2
 export const MARKER_CODES = {
-  // Системные события
   SESSION_START: 1,
   SESSION_END: 999,
-
-  // Baseline (фоновая активность)
   BASELINE_1_EYES_OPEN: 10,
   BASELINE_1_EYES_CLOSED: 11,
   BASELINE_2_EYES_OPEN: 12,
   BASELINE_2_EYES_CLOSED: 13,
   BASELINE_3_EYES_OPEN: 14,
   BASELINE_3_EYES_CLOSED: 15,
-
-  // Задания
   TASK_LLM_START: 20,
   TASK_LLM_END: 21,
   TASK_SEARCH_START: 30,
   TASK_SEARCH_END: 31,
-
-  // Вопросы (100-199 - показ, 200-299 - ответ)
   QUESTION_SHOWN_BASE: 100,
   ANSWER_SUBMITTED_BASE: 200,
-
-  // NASA-TLX
   NASA_TLX_1_START: 500,
   NASA_TLX_1_END: 501,
   NASA_TLX_2_START: 510,
   NASA_TLX_2_END: 511,
-
-  // Экспорт
   EXPORT_START: 900
 };
 
@@ -69,13 +57,11 @@ export class ExperimentService {
   participantId: string = '';
   group: number = 1;
   isTestMode: boolean = false;
-
   eventLog: EventLog[] = [];
   answersLog: AnswerLog[] = [];
-
   private questionShownTime: number = 0;
-  private nic2ServerUrl = 'http://localhost:3000'; // Адрес сервера-моста
-  private nic2Enabled = true; // Включить/выключить отправку маркеров
+  private nic2ServerUrl = 'http://localhost:3000';
+  private nic2Enabled = true;
 
   constructor() {
     this.setupEmergencyStop();
@@ -87,17 +73,11 @@ export class ExperimentService {
     this.isTestMode = isTest;
     this.eventLog = [];
     this.answersLog = [];
-
-    this.logEvent('SESSION_START', { 
-      pid, 
-      group, 
-      isTest, 
-      systemTime: new Date().toISOString() 
-    }, MARKER_CODES.SESSION_START);
+    this.logEvent('SESSION_START', { pid, group, isTest, systemTime: new Date().toISOString() }, MARKER_CODES.SESSION_START);
   }
 
-  // ✅ ИСПРАВЛЕННЫЙ МЕТОД - БЕЗ async/await
-  logEvent(name: string, details: any = {}, markerCode?: number) {
+  // ✅ ВОЗВРАЩАЕМ async для надёжности
+  async logEvent(name: string, details: any = {}, markerCode?: number): Promise<void> {
     const timestamp = Date.now();
     const event: EventLog = {
       timestamp: timestamp,
@@ -107,14 +87,9 @@ export class ExperimentService {
       markerCode: markerCode
     };
 
-    // Отправляем маркер в NIC2 (если указан код) - БЕЗ AWAIT!
     if (markerCode !== undefined && this.nic2Enabled) {
-      this.sendMarkerToNIC2(markerCode, name, details).then(success => {
-        event.markerSent = success;
-      }).catch(err => {
-        event.markerSent = false;
-        console.warn('Маркер не отправлен в NIC2:', err);
-      });
+      const success = await this.sendMarkerToNIC2(markerCode, name, details);
+      event.markerSent = success;
     }
 
     this.eventLog.push(event);
@@ -124,18 +99,10 @@ export class ExperimentService {
     try {
       const response = await fetch(`${this.nic2ServerUrl}/send-marker`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code,
-          name: name,
-          details: details
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name, details })
       });
-
       const result = await response.json();
-
       if (result.success) {
         console.log(`✓ NIC2 маркер отправлен: ${code} (${name})`);
         return true;
@@ -145,29 +112,22 @@ export class ExperimentService {
       }
     } catch (error) {
       console.warn(`✗ Ошибка отправки маркера в NIC2:`, error);
-      console.warn(`  Убедитесь, что сервер запущен: npm run server`);
       return false;
     }
   }
 
   markQuestionShown(questionId: string) {
     this.questionShownTime = Date.now();
-
-    // Вычисляем код маркера: QUESTION_SHOWN_BASE + номер вопроса
     const questionNumber = this.extractQuestionNumber(questionId);
     const markerCode = MARKER_CODES.QUESTION_SHOWN_BASE + questionNumber;
-
-    this.logEvent('QUESTION_SHOWN', { 
-      questionId, 
-      timestamp: this.questionShownTime 
-    }, markerCode);
+    // БЕЗ await - не блокируем UI
+    this.logEvent('QUESTION_SHOWN', { questionId, timestamp: this.questionShownTime }, markerCode);
   }
 
   submitAnswer(stage: ConditionType, question: Question, input: string) {
     const submittedTime = Date.now();
     const responseTime = submittedTime - this.questionShownTime;
     const isCorrect = checkAnswer(question, input);
-
     const questionNumber = this.extractQuestionNumber(question.id);
     const markerShown = MARKER_CODES.QUESTION_SHOWN_BASE + questionNumber;
     const markerSubmitted = MARKER_CODES.ANSWER_SUBMITTED_BASE + questionNumber;
@@ -186,16 +146,11 @@ export class ExperimentService {
       markerSubmitted: markerSubmitted
     });
 
-    this.logEvent('ANSWER_SUBMITTED', { 
-      questionId: question.id, 
-      correct: isCorrect,
-      responseTimeMs: responseTime 
-    }, markerSubmitted);
-
+    // БЕЗ await - не блокируем UI
+    this.logEvent('ANSWER_SUBMITTED', { questionId: question.id, correct: isCorrect, responseTimeMs: responseTime }, markerSubmitted);
     return isCorrect;
   }
 
-  // Извлекаем номер вопроса из ID (A01 -> 1, B15 -> 15)
   private extractQuestionNumber(questionId: string): number {
     const match = questionId.match(/\d+/);
     return match ? parseInt(match[0], 10) : 0;
@@ -213,10 +168,7 @@ export class ExperimentService {
 
   exportData() {
     this.logEvent('EXPORT_INITIATED', {}, MARKER_CODES.EXPORT_START);
-
     const wb: XLSX.WorkBook = XLSX.utils.book_new();
-
-    // Summary
     const summaryData = [{
       ParticipantID: this.participantId,
       Group: this.group,
@@ -228,8 +180,6 @@ export class ExperimentService {
     }];
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
-
-    // Answers
     const answersData = this.answersLog.map(a => ({
       ParticipantID: a.participantId,
       Stage: a.stage,
@@ -247,8 +197,6 @@ export class ExperimentService {
     }));
     const wsAnswers = XLSX.utils.json_to_sheet(answersData);
     XLSX.utils.book_append_sheet(wb, wsAnswers, 'Answers');
-
-    // EventLog с маркерами
     const eventsData = this.eventLog.map(e => ({
       Timestamp: e.timestamp,
       ReadableTime: e.readableTime,
@@ -259,8 +207,6 @@ export class ExperimentService {
     }));
     const wsEvents = XLSX.utils.json_to_sheet(eventsData);
     XLSX.utils.book_append_sheet(wb, wsEvents, 'EventLog');
-
-    // Marker Codes Reference
     const markerCodesData = Object.entries(MARKER_CODES).map(([name, code]) => ({
       Code: code,
       EventName: name,
@@ -268,15 +214,10 @@ export class ExperimentService {
     }));
     const wsMarkerCodes = XLSX.utils.json_to_sheet(markerCodesData);
     XLSX.utils.book_append_sheet(wb, wsMarkerCodes, 'MarkerCodes');
-
     const excelBuffer: any = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const data: Blob = new Blob([excelBuffer], { 
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-    });
-
+    const data: Blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const fileName = `Participant_${this.participantId}_${Date.now()}.xlsx`;
     saveAs(data, fileName);
-
     this.logEvent('EXPORT_COMPLETED', { fileName });
   }
 
