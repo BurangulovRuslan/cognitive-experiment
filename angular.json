@@ -17,6 +17,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
+            "baseHref": "/cognitive-experiment/",
             "outputPath": "dist/cognitive-experiment",
             "index": "src/index.html",
             "browser": "src/main.ts",
@@ -38,6 +39,7 @@
           },
           "configurations": {
             "production": {
+              "baseHref": "/cognitive-experiment/",
               "budgets": [
                 {
                   "type": "initial",

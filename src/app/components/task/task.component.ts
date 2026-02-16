@@ -55,25 +55,25 @@ import { FormsModule } from '@angular/forms';
           </div>
 
           <div class="image-wrapper">
-            <img
-              [src]="'cognitive-experiment/images/' + currentQuestion.img"
+            <img 
+              [src]="'images/' + currentQuestion.img" 
               [alt]="'Question ' + currentQuestion.id"
               class="question-image"
               (contextmenu)="$event.preventDefault()">
           </div>
 
           <div class="answer-section">
-            <input
+            <input 
               type="text"
-              [(ngModel)]="currentAnswer"
+              [(ngModel)]="currentAnswer" 
               (keyup.enter)="nextQuestion()"
               placeholder="Введите ваш ответ здесь..."
               class="answer-input"
               [disabled]="timeExpired"
               #answerInput>
 
-            <button
-              class="btn-next"
+            <button 
+              class="btn-next" 
               (click)="nextQuestion()"
               [disabled]="!currentAnswer.trim() || timeExpired">
               Далее →
@@ -104,11 +104,7 @@ import { FormsModule } from '@angular/forms';
     </div>
   `,
   styles: [`
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     .instruction-screen {
       min-height: 100vh;
@@ -131,26 +127,11 @@ import { FormsModule } from '@angular/forms';
       text-align: center;
       margin-bottom: 30px;
     }
-    .instruction-content {
-      color: #555;
-      line-height: 1.8;
-    }
-    .main-instruction {
-      font-size: 18px;
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .task-description h3, .tips p strong {
-      color: #2c3e50;
-      margin-bottom: 15px;
-    }
-    .task-description ul, .tips ul {
-      margin-left: 25px;
-      margin-bottom: 25px;
-    }
-    .task-description li, .tips li {
-      margin-bottom: 10px;
-    }
+    .instruction-content { color: #555; line-height: 1.8; }
+    .main-instruction { font-size: 18px; text-align: center; margin-bottom: 30px; }
+    .task-description h3, .tips p strong { color: #2c3e50; margin-bottom: 15px; }
+    .task-description ul, .tips ul { margin-left: 25px; margin-bottom: 25px; }
+    .task-description li, .tips li { margin-bottom: 10px; }
     .tips {
       background: #fff9e6;
       padding: 20px;
@@ -172,10 +153,7 @@ import { FormsModule } from '@angular/forms';
       cursor: pointer;
       transition: all 0.3s;
     }
-    .btn-start-task:hover {
-      background: #229954;
-      transform: translateY(-2px);
-    }
+    .btn-start-task:hover { background: #229954; transform: translateY(-2px); }
 
     .task-screen {
       min-height: 100vh;
@@ -185,10 +163,7 @@ import { FormsModule } from '@angular/forms';
       background: #f5f6fa;
       padding: 20px;
     }
-    .task-content {
-      width: 100%;
-      max-width: 1000px;
-    }
+    .task-content { width: 100%; max-width: 1000px; }
     .question-container {
       background: white;
       padding: 40px;
@@ -204,11 +179,7 @@ import { FormsModule } from '@angular/forms';
       letter-spacing: 1px;
       margin-bottom: 20px;
     }
-    .image-wrapper {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 30px;
-    }
+    .image-wrapper { display: flex; justify-content: center; margin-bottom: 30px; }
     .question-image {
       max-width: 100%;
       max-height: 60vh;
@@ -217,11 +188,7 @@ import { FormsModule } from '@angular/forms';
       user-select: none;
       pointer-events: none;
     }
-    .answer-section {
-      display: flex;
-      gap: 15px;
-      align-items: stretch;
-    }
+    .answer-section { display: flex; gap: 15px; align-items: stretch; }
     .answer-input {
       flex: 1;
       padding: 15px 20px;
@@ -230,14 +197,8 @@ import { FormsModule } from '@angular/forms';
       font-size: 16px;
       transition: border-color 0.3s;
     }
-    .answer-input:focus {
-      outline: none;
-      border-color: #3498db;
-    }
-    .answer-input:disabled {
-      background: #f5f5f5;
-      cursor: not-allowed;
-    }
+    .answer-input:focus { outline: none; border-color: #3498db; }
+    .answer-input:disabled { background: #f5f5f5; cursor: not-allowed; }
     .btn-next {
       padding: 15px 40px;
       background: #3498db;
@@ -250,19 +211,11 @@ import { FormsModule } from '@angular/forms';
       transition: all 0.3s;
       white-space: nowrap;
     }
-    .btn-next:hover:not(:disabled) {
-      background: #2980b9;
-    }
-    .btn-next:disabled {
-      background: #bdc3c7;
-      cursor: not-allowed;
-    }
+    .btn-next:hover:not(:disabled) { background: #2980b9; }
+    .btn-next:disabled { background: #bdc3c7; cursor: not-allowed; }
 
     .waiting-screen, .timeout-screen {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+      display: flex; justify-content: center; align-items: center; min-height: 100vh;
     }
     .waiting-card, .timeout-card {
       background: white;
@@ -271,25 +224,10 @@ import { FormsModule } from '@angular/forms';
       text-align: center;
       box-shadow: 0 10px 40px rgba(0,0,0,0.1);
     }
-    .check-icon {
-      font-size: 80px;
-      color: #27ae60;
-      margin-bottom: 20px;
-    }
-    .timeout-icon {
-      font-size: 80px;
-      margin-bottom: 20px;
-    }
-    h2 {
-      color: #2c3e50;
-      font-size: 28px;
-      margin-bottom: 15px;
-    }
-    .waiting-message, .timeout-message {
-      color: #555;
-      font-size: 18px;
-      line-height: 1.6;
-    }
+    .check-icon { font-size: 80px; color: #27ae60; margin-bottom: 20px; }
+    .timeout-icon { font-size: 80px; margin-bottom: 20px; }
+    h2 { color: #2c3e50; font-size: 28px; margin-bottom: 15px; }
+    .waiting-message, .timeout-message { color: #555; font-size: 18px; line-height: 1.6; }
   `]
 })
 export class TaskComponent implements OnInit, OnDestroy {
@@ -335,24 +273,24 @@ export class TaskComponent implements OnInit, OnDestroy {
     }
   }
 
-  async startTask() {
+  startTask() {
     this.showInstruction = false;
 
     const startMarker = this.conditionType === 'LLM'
       ? MARKER_CODES.TASK_LLM_START
       : MARKER_CODES.TASK_SEARCH_START;
 
-    await this.expService.logEvent(`TASK_${this.conditionType}_START`, {
+    void this.expService.logEvent(`TASK_${this.conditionType}_START`, {
       order: this.order,
       questionsCount: this.questions.length
     }, startMarker);
 
     if (this.currentQuestion) {
-      this.expService.markQuestionShown(this.currentQuestion.id);
+      this.expService.markQuestionShown(this.conditionType, this.currentQuestion.id);
     }
 
     this.timerRef = setTimeout(() => {
-      void this.finishTask();
+      this.finishTask();
     }, this.taskDuration * 1000);
   }
 
@@ -361,9 +299,7 @@ export class TaskComponent implements OnInit, OnDestroy {
   }
 
   nextQuestion() {
-    if (!this.currentQuestion || !this.currentAnswer.trim() || this.timeExpired) {
-      return;
-    }
+    if (!this.currentQuestion || !this.currentAnswer.trim() || this.timeExpired) return;
 
     this.expService.submitAnswer(
       this.conditionType,
@@ -375,16 +311,14 @@ export class TaskComponent implements OnInit, OnDestroy {
     this.currentIndex++;
 
     if (this.currentQuestion) {
-      this.expService.markQuestionShown(this.currentQuestion.id);
+      this.expService.markQuestionShown(this.conditionType, this.currentQuestion.id);
     } else {
-      this.expService.logEvent('ALL_QUESTIONS_COMPLETED_WAITING');
+      void this.expService.logEvent('ALL_QUESTIONS_COMPLETED_WAITING');
     }
   }
 
-  async finishTask() {
-    if (this.timerRef) {
-      clearTimeout(this.timerRef);
-    }
+  finishTask() {
+    if (this.timerRef) clearTimeout(this.timerRef);
 
     this.timeExpired = true;
 
@@ -392,13 +326,11 @@ export class TaskComponent implements OnInit, OnDestroy {
       ? MARKER_CODES.TASK_LLM_END
       : MARKER_CODES.TASK_SEARCH_END;
 
-    await this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
+    void this.expService.logEvent(`TASK_${this.conditionType}_TIMEOUT`, {
       questionsAnswered: this.currentIndex
     }, endMarker);
 
-    setTimeout(() => {
-      this.goToNext();
-    }, 2000);
+    setTimeout(() => this.goToNext(), 2000);
   }
 
   goToNext() {
@@ -406,8 +338,6 @@ export class TaskComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    if (this.timerRef) {
-      clearTimeout(this.timerRef);
-    }
+    if (this.timerRef) clearTimeout(this.timerRef);
   }
 }

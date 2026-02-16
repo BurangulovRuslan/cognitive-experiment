@@ -21,11 +21,11 @@ import { CommonModule } from '@angular/common';
           </div>
           <div class="step-item">
             <span class="step-number">2</span>
-            <span class="step-text">Смотрите на крест в центре экрана (90 сек)</span>
+            <span class="step-text">Смотрите на крест в центре экрана ({{ duration }} сек)</span>
           </div>
           <div class="step-item">
             <span class="step-number">3</span>
-            <span class="step-text">По сигналу закройте глаза (90 сек)</span>
+            <span class="step-text">По сигналу закройте глаза ({{ duration }} сек)</span>
           </div>
         </div>
         <button class="btn-start" (click)="startBaseline()">Начать запись</button>
@@ -39,6 +39,7 @@ import { CommonModule } from '@angular/common';
       <div *ngIf="step === 'eyes-closed'" class="eyes-closed-screen">
         <h1 class="close-eyes-text">ЗАКРОЙТЕ ГЛАЗА</h1>
         <p class="instruction">Откройте их, когда услышите звуковой сигнал</p>
+        <div class="timer-hidden">{{ remainingTime }}</div>
       </div>
     </div>
   `,
@@ -59,96 +60,35 @@ import { CommonModule } from '@angular/common';
       max-width: 600px;
       text-align: center;
     }
-    h2 {
-      color: #2c3e50;
-      font-size: 28px;
-      margin-bottom: 20px;
-    }
-    .instruction {
-      color: #555;
-      font-size: 16px;
-      line-height: 1.6;
-      margin-bottom: 30px;
-    }
-    .steps {
-      text-align: left;
-      margin: 30px 0;
-    }
-    .step-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 15px;
-    }
+    h2 { color: #2c3e50; font-size: 28px; margin-bottom: 20px; }
+    .instruction { color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 30px; }
+    .steps { text-align: left; margin: 30px 0; }
+    .step-item { display: flex; align-items: center; margin-bottom: 15px; }
     .step-number {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 30px;
-      height: 30px;
-      background: #3498db;
-      color: white;
-      border-radius: 50%;
-      font-weight: bold;
-      margin-right: 15px;
-      flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; background: #3498db; color: white;
+      border-radius: 50%; font-weight: bold; margin-right: 15px; flex-shrink: 0;
     }
-    .step-text {
-      color: #2c3e50;
-      font-size: 15px;
-    }
+    .step-text { color: #2c3e50; font-size: 15px; }
     .btn-start {
-      padding: 15px 40px;
-      background: #27ae60;
-      color: white;
-      border: none;
-      border-radius: 30px;
-      font-size: 18px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+      padding: 15px 40px; background: #27ae60; color: white; border: none;
+      border-radius: 30px; font-size: 18px; font-weight: 600; cursor: pointer;
+      transition: all 0.3s; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
     }
-    .btn-start:hover {
-      background: #229954;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
-    }
+    .btn-start:hover { background: #229954; transform: translateY(-2px); }
     .fixation-screen {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: white;
+      width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: white;
     }
-    .cross {
-      font-size: 120px;
-      font-weight: bold;
-      color: #2c3e50;
-      user-select: none;
-    }
-    .eyes-closed-screen {
-      text-align: center;
-      color: white;
-    }
+    .cross { font-size: 120px; font-weight: bold; color: #2c3e50; user-select: none; }
+    .eyes-closed-screen { text-align: center; color: white; }
     .close-eyes-text {
-      font-size: 48px;
-      font-weight: bold;
-      margin-bottom: 20px;
+      font-size: 48px; font-weight: bold; margin-bottom: 20px;
       text-shadow: 0 2px 10px rgba(0,0,0,0.3);
       animation: pulse 2s ease-in-out infinite;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     .timer-hidden {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      color: #bbb;
-      font-size: 12px;
-      opacity: 0.3;
+      position: absolute; bottom: 20px; right: 20px; color: #bbb; font-size: 12px; opacity: 0.3;
     }
   `]
 })
@@ -158,6 +98,7 @@ export class BaselineComponent implements OnInit, OnDestroy {
 
   duration = 90;
   remainingTime = 90;
+
   private timerInterval: any;
 
   constructor(
@@ -176,54 +117,58 @@ export class BaselineComponent implements OnInit, OnDestroy {
   }
 
   async startBaseline() {
+    // Событие без маркера (для журнала)
     await this.expService.logEvent(`BASELINE_PHASE_${this.phase}_START`);
     await this.runEyesOpen();
   }
 
-  async runEyesOpen() {
+  private startCountdown(seconds: number): Promise<void> {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+
+    this.remainingTime = seconds;
+
+    return new Promise((resolve) => {
+      this.timerInterval = setInterval(() => {
+        this.remainingTime--;
+        if (this.remainingTime <= 0) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+          resolve();
+        }
+      }, 1000);
+    });
+  }
+
+  private async runEyesOpen() {
     this.step = 'eyes-open';
-    this.remainingTime = this.duration;
 
     const markerCode = this.getEyesOpenMarker();
     await this.expService.logEvent('EYES_OPEN_START', { phase: this.phase }, markerCode);
 
-    this.timerInterval = setInterval(() => {
-      this.remainingTime--;
-      if (this.remainingTime <= 0) {
-        clearInterval(this.timerInterval);
-        this.playBeep();
-        void this.runEyesClosed();
-      }
-    }, 1000);
+    await this.startCountdown(this.duration);
+
+    this.playBeep();
+    await this.runEyesClosed();
   }
 
-  async runEyesClosed() {
+  private async runEyesClosed() {
     this.step = 'eyes-closed';
-    this.remainingTime = this.duration;
 
     const markerCode = this.getEyesClosedMarker();
     await this.expService.logEvent('EYES_CLOSED_START', { phase: this.phase }, markerCode);
 
-    this.timerInterval = setInterval(() => {
-      this.remainingTime--;
-      if (this.remainingTime <= 0) {
-        clearInterval(this.timerInterval);
+    await this.startCountdown(this.duration);
 
-        // 🔔 Сигнал "откройте глаза"
-        this.playBeep();
-        void this.markEyesClosedEndAndFinish();
-      }
-    }, 1000);
-  }
+    // Сигнал: “откройте глаза”
+    this.playBeep();
 
-  private async markEyesClosedEndAndFinish() {
-    // ✅ единый код конца закрытых глаз
+    // ✅ Новый маркер: конец сегмента закрытых глаз (момент сигнала открыть глаза)
     await this.expService.logEvent('EYES_CLOSED_END', { phase: this.phase }, MARKER_CODES.EYES_CLOSED_END);
 
     await this.finishBaseline();
   }
 
-  getEyesOpenMarker(): number {
+  private getEyesOpenMarker(): number {
     switch (this.phase) {
       case 1: return MARKER_CODES.BASELINE_1_EYES_OPEN;
       case 2: return MARKER_CODES.BASELINE_2_EYES_OPEN;
@@ -232,7 +177,7 @@ export class BaselineComponent implements OnInit, OnDestroy {
     }
   }
 
-  getEyesClosedMarker(): number {
+  private getEyesClosedMarker(): number {
     switch (this.phase) {
       case 1: return MARKER_CODES.BASELINE_1_EYES_CLOSED;
       case 2: return MARKER_CODES.BASELINE_2_EYES_CLOSED;
@@ -241,7 +186,7 @@ export class BaselineComponent implements OnInit, OnDestroy {
     }
   }
 
-  playBeep() {
+  private playBeep() {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioContext();
@@ -264,12 +209,12 @@ export class BaselineComponent implements OnInit, OnDestroy {
     }
   }
 
-  async finishBaseline() {
+  private async finishBaseline() {
     await this.expService.logEvent(`BASELINE_PHASE_${this.phase}_FINISHED`);
     this.goToNext();
   }
 
-  goToNext() {
+  private goToNext() {
     if (this.phase === 1) {
       this.router.navigate(['/task'], { queryParams: { order: 1 } });
     } else if (this.phase === 2) {
@@ -280,8 +225,6 @@ export class BaselineComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-    }
+    if (this.timerInterval) clearInterval(this.timerInterval);
   }
 }

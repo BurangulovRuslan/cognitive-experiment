@@ -6,7 +6,7 @@ import { saveAs } from 'file-saver';
 export type ConditionType = 'LLM' | 'SEARCH';
 
 export interface EventLog {
-  eventId: number;            // ✅ стабильный порядок
+  eventId: number;            // стабильный порядок
   timestamp: number;
   readableTime: string;
   event: string;
@@ -27,12 +27,10 @@ export interface AnswerLog {
   responseTimeMs: number;
   markerShown?: number;
   markerSubmitted?: number;
-  // ✅ помогает отлаживать связку
   shownEventId?: number;
   submittedEventId?: number;
 }
 
-// Коды маркеров для NIC2
 export const MARKER_CODES = {
   SESSION_START: 1,
   SESSION_END: 999,
@@ -43,6 +41,8 @@ export const MARKER_CODES = {
   BASELINE_2_EYES_CLOSED: 13,
   BASELINE_3_EYES_OPEN: 14,
   BASELINE_3_EYES_CLOSED: 15,
+
+  // конец сегмента "eyes closed" (сигнал открыть глаза)
   EYES_CLOSED_END: 16,
 
   TASK_LLM_START: 20,
@@ -50,8 +50,12 @@ export const MARKER_CODES = {
   TASK_SEARCH_START: 30,
   TASK_SEARCH_END: 31,
 
+  // базы (смещение будет зависеть от stage)
   QUESTION_SHOWN_BASE: 100,
   ANSWER_SUBMITTED_BASE: 200,
+
+  // оффсет для SEARCH чтобы не было коллизий с LLM
+  SEARCH_OFFSET: 20,
 
   NASA_TLX_1_START: 500,
   NASA_TLX_1_END: 501,
@@ -61,9 +65,7 @@ export const MARKER_CODES = {
   EXPORT_START: 900
 };
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class ExperimentService {
   participantId: string = '';
   group: number = 1;
@@ -75,11 +77,10 @@ export class ExperimentService {
   private nic2ServerUrl = 'http://localhost:3000';
   private nic2Enabled = true;
 
-  // ✅ вместо одного questionShownTime
+  // показ по каждому вопросу отдельно
   private shownAtByQuestionId = new Map<string, number>();
   private shownEventIdByQuestionId = new Map<string, number>();
 
-  // ✅ стабильный порядок событий
   private nextEventId = 1;
 
   constructor() {
@@ -97,7 +98,6 @@ export class ExperimentService {
     this.shownEventIdByQuestionId.clear();
     this.nextEventId = 1;
 
-    // важные маркеры можно await'ить, но тут необязательно
     void this.logEvent('SESSION_START', {
       pid,
       group,
@@ -107,8 +107,8 @@ export class ExperimentService {
   }
 
   /**
-   * ✅ Главное: eventLog фиксируем СРАЗУ, сетевую отправку делаем после.
-   * Так порядок в Excel = порядок реальных событий в UI.
+   * ВАЖНО: eventLog пишем сразу (порядок UI),
+   * отправка в NIC2 после (не ломает последовательность в Excel).
    */
   async logEvent(name: string, details: any = {}, markerCode?: number): Promise<number> {
     const timestamp = Date.now();
@@ -123,10 +123,8 @@ export class ExperimentService {
       markerCode
     };
 
-    // ✅ фиксируем порядок сразу
     this.eventLog.push(event);
 
-    // ✅ затем отправляем маркер (если надо)
     if (typeof markerCode === 'number' && markerCode > 0 && this.nic2Enabled) {
       const success = await this.sendMarkerToNIC2(markerCode, name, details);
       event.markerSent = success;
@@ -159,48 +157,48 @@ export class ExperimentService {
     }
   }
 
-  markQuestionShown(questionId: string) {
+  /** Единый расчёт маркеров вопросов (LLM vs SEARCH) */
+  private getQuestionMarkerShown(stage: ConditionType, questionId: string): number {
+    const qn = this.extractQuestionNumber(questionId); // 1..15
+    const offset = (stage === 'SEARCH') ? MARKER_CODES.SEARCH_OFFSET : 0;
+    return MARKER_CODES.QUESTION_SHOWN_BASE + offset + qn; // LLM:101.. / SEARCH:121..
+  }
+
+  private getQuestionMarkerSubmitted(stage: ConditionType, questionId: string): number {
+    const qn = this.extractQuestionNumber(questionId);
+    const offset = (stage === 'SEARCH') ? MARKER_CODES.SEARCH_OFFSET : 0;
+    return MARKER_CODES.ANSWER_SUBMITTED_BASE + offset + qn; // LLM:201.. / SEARCH:221..
+  }
+
+  markQuestionShown(stage: ConditionType, questionId: string) {
     const shownAt = Date.now();
     this.shownAtByQuestionId.set(questionId, shownAt);
 
-    const questionNumber = this.extractQuestionNumber(questionId);
-    const markerCode = MARKER_CODES.QUESTION_SHOWN_BASE + questionNumber;
+    const markerCode = this.getQuestionMarkerShown(stage, questionId);
 
-    // ✅ логируем и сохраняем eventId показа именно этого questionId
-    void this.logEvent('QUESTION_SHOWN', { questionId, timestamp: shownAt }, markerCode)
-      .then((eventId) => {
-        this.shownEventIdByQuestionId.set(questionId, eventId);
-      });
+    void this.logEvent('QUESTION_SHOWN', {
+      stage,
+      questionId,
+      timestamp: shownAt
+    }, markerCode).then((eventId) => {
+      this.shownEventIdByQuestionId.set(questionId, eventId);
+    });
   }
 
   submitAnswer(stage: ConditionType, question: Question, input: string) {
     const submittedTime = Date.now();
 
-    // ✅ берём время показа именно этого вопроса
     const shownTime = this.shownAtByQuestionId.get(question.id) ?? submittedTime;
     const responseTime = submittedTime - shownTime;
 
     const isCorrect = checkAnswer(question, input);
 
-    const questionNumber = this.extractQuestionNumber(question.id);
-    const markerShown = MARKER_CODES.QUESTION_SHOWN_BASE + questionNumber;
-    const markerSubmitted = MARKER_CODES.ANSWER_SUBMITTED_BASE + questionNumber;
+    const markerShown = this.getQuestionMarkerShown(stage, question.id);
+    const markerSubmitted = this.getQuestionMarkerSubmitted(stage, question.id);
 
     const shownEventId = this.shownEventIdByQuestionId.get(question.id);
 
-    // ✅ логируем ANSWER_SUBMITTED и сохраняем eventId ответа
-    void this.logEvent('ANSWER_SUBMITTED', {
-      questionId: question.id,
-      correct: isCorrect,
-      responseTimeMs: responseTime
-    }, markerSubmitted).then((submittedEventId) => {
-      // допишем submittedEventId в последнюю добавленную запись answersLog (ниже мы её уже пушим)
-      const last = this.answersLog[this.answersLog.length - 1];
-      if (last && last.questionId === question.id && last.timestampSubmitted === submittedTime) {
-        last.submittedEventId = submittedEventId;
-      }
-    });
-
+    // сначала пушим answersLog, затем допишем submittedEventId когда придёт Promise
     this.answersLog.push({
       participantId: this.participantId,
       stage,
@@ -214,6 +212,18 @@ export class ExperimentService {
       markerShown,
       markerSubmitted,
       shownEventId
+    });
+
+    void this.logEvent('ANSWER_SUBMITTED', {
+      stage,
+      questionId: question.id,
+      correct: isCorrect,
+      responseTimeMs: responseTime
+    }, markerSubmitted).then((submittedEventId) => {
+      const last = this.answersLog[this.answersLog.length - 1];
+      if (last && last.questionId === question.id && last.timestampSubmitted === submittedTime) {
+        last.submittedEventId = submittedEventId;
+      }
     });
 
     return isCorrect;
@@ -302,6 +312,7 @@ export class ExperimentService {
     const descriptions: { [key: string]: string } = {
       'SESSION_START': 'Начало экспериментальной сессии',
       'SESSION_END': 'Завершение сессии',
+
       'BASELINE_1_EYES_OPEN': 'Baseline 1: глаза открыты',
       'BASELINE_1_EYES_CLOSED': 'Baseline 1: глаза закрыты',
       'BASELINE_2_EYES_OPEN': 'Baseline 2: глаза открыты',
@@ -309,16 +320,21 @@ export class ExperimentService {
       'BASELINE_3_EYES_OPEN': 'Baseline 3: глаза открыты',
       'BASELINE_3_EYES_CLOSED': 'Baseline 3: глаза закрыты',
       'EYES_CLOSED_END': 'Конец закрытых глаз (сигнал открыть глаза)',
-      'TASK_LLM_START': 'Начало задания с LLM (ChatGPT)',
-      'TASK_LLM_END': 'Окончание задания с LLM',
-      'TASK_SEARCH_START': 'Начало задания с поиском (Google)',
-      'TASK_SEARCH_END': 'Окончание задания с поиском',
-      'QUESTION_SHOWN_BASE': 'Показ вопроса (100 + номер)',
-      'ANSWER_SUBMITTED_BASE': 'Ответ отправлен (200 + номер)',
-      'NASA_TLX_1_START': 'Начало NASA-TLX опросника 1',
-      'NASA_TLX_1_END': 'Конец NASA-TLX опросника 1',
-      'NASA_TLX_2_START': 'Начало NASA-TLX опросника 2',
-      'NASA_TLX_2_END': 'Конец NASA-TLX опросника 2',
+
+      'TASK_LLM_START': 'Начало задания LLM',
+      'TASK_LLM_END': 'Окончание задания LLM',
+      'TASK_SEARCH_START': 'Начало задания SEARCH',
+      'TASK_SEARCH_END': 'Окончание задания SEARCH',
+
+      'QUESTION_SHOWN_BASE': 'Показ вопроса (LLM: 100+N, SEARCH: 120+N)',
+      'ANSWER_SUBMITTED_BASE': 'Ответ (LLM: 200+N, SEARCH: 220+N)',
+      'SEARCH_OFFSET': 'Смещение для SEARCH (+20)',
+
+      'NASA_TLX_1_START': 'Начало NASA-TLX 1',
+      'NASA_TLX_1_END': 'Конец NASA-TLX 1',
+      'NASA_TLX_2_START': 'Начало NASA-TLX 2',
+      'NASA_TLX_2_END': 'Конец NASA-TLX 2',
+
       'EXPORT_START': 'Экспорт данных'
     };
     return descriptions[name] || '';
